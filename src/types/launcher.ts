@@ -99,3 +99,31 @@ export interface DeviceCodeResponse {
   interval: number;
   message: string;
 }
+
+export interface ExportOptions {
+  instanceId: string;
+  packageAllFiles: boolean;
+  keepSettings: boolean;
+  includeKeybindsAndVolume: boolean;
+  includeMultiplayerServers: boolean;
+  includeJeiData: boolean;
+  includeModConfigs: boolean;
+  includeResourcePacks: boolean;
+  includeShaderPacks: boolean;
+}
+
+export interface ExportScanSummary {
+  totalMods: number;
+  modrinthMatched: number;
+  curseforgeMatched: number;
+  unlistedMods: string[];
+}
+
+export interface ExportResult {
+  outputPath: string;
+  totalMods: number;
+  modrinthMatched: number;
+  curseforgeMatched: number;
+  bundledDirectly: number;
+  unlistedMods: string[];
+}

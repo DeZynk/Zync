@@ -5,6 +5,9 @@ import type {
   ContentSource,
   ContentType,
   DeviceCodeResponse,
+  ExportOptions,
+  ExportResult,
+  ExportScanSummary,
   GameInstance,
   InstalledMod,
   JavaRuntime,
@@ -91,6 +94,12 @@ export const api = {
     invoke<InstalledMod>("toggle_mod", { instanceId, filename }),
   deleteMod: (instanceId: string, filename: string) =>
     invoke<void>("delete_mod", { instanceId, filename }),
+
+  // Export
+  scanInstanceModsForExport: (instanceId: string) =>
+    invoke<ExportScanSummary>("scan_instance_mods_for_export", { instanceId }),
+  exportInstance: (options: ExportOptions) =>
+    invoke<ExportResult>("export_instance", { options }),
 
   // Auth
   addOfflineAccount: (username: string) => invoke<Account>("add_offline_account", { username }),

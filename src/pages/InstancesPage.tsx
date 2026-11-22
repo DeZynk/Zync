@@ -1,5 +1,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import {
+  AlertTriangle,
+  Archive,
+  Check,
   Download,
   FolderOpen,
   Layers,
@@ -7,6 +10,7 @@ import {
   List,
   Package,
   Play,
+  SearchCheck,
   Sliders,
   Trash2,
   X,
@@ -14,7 +18,12 @@ import {
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { api } from "../lib/api";
-import type { GameInstance, InstalledMod } from "../types/launcher";
+import type {
+  ExportResult,
+  ExportScanSummary,
+  GameInstance,
+  InstalledMod,
+} from "../types/launcher";
 
 interface InstancesPageProps {
   instances: GameInstance[];
@@ -36,12 +45,76 @@ export function InstancesPage({
   const { t } = useTranslation();
   const [viewStyle, setViewStyle] = useState<"grid" | "list">("grid");
 
-  // Configure Instance Modal State
+  // Configure Instance + Export Modal State
   const [editingInst, setEditingInst] = useState<GameInstance | null>(null);
+  const [keepSettings, setKeepSettings] = useState(true);
+  const [includeKeybindsAndVolume, setIncludeKeybindsAndVolume] = useState(true);
+  const [includeMultiplayerServers, setIncludeMultiplayerServers] = useState(true);
+  const [includeJeiData, setIncludeJeiData] = useState(true);
+  const [includeModConfigs, setIncludeModConfigs] = useState(true);
+  const [includeResourcePacks, setIncludeResourcePacks] = useState(false);
+  const [includeShaderPacks, setIncludeShaderPacks] = useState(false);
+  const [packageAllFiles, setPackageAllFiles] = useState(false);
+  const [scanningExport, setScanningExport] = useState(false);
+  const [scanSummary, setScanSummary] = useState<ExportScanSummary | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportResult, setExportResult] = useState<ExportResult | null>(null);
 
   // Manage Installed Mods Modal State
   const [modsModalInst, setModsModalInst] = useState<GameInstance | null>(null);
   const [installedMods, setInstalledMods] = useState<InstalledMod[]>([]);
+
+  const openConfigureModal = (inst: GameInstance) => {
+    setEditingInst({ ...inst });
+    setScanSummary(null);
+    setExportResult(null);
+    setPackageAllFiles(false);
+    setKeepSettings(true);
+  };
+
+  const handleScanExportMods = async () => {
+    if (!editingInst) return;
+    setScanningExport(true);
+    setExportResult(null);
+    try {
+      const summary = await api.scanInstanceModsForExport(editingInst.id);
+      setScanSummary(summary);
+    } catch (err) {
+      onError(String(err));
+    } finally {
+      setScanningExport(false);
+    }
+  };
+
+  const handleExportInstance = async () => {
+    if (!editingInst) return;
+    setExporting(true);
+    setExportResult(null);
+    try {
+      const res = await api.exportInstance({
+        instanceId: editingInst.id,
+        packageAllFiles,
+        keepSettings,
+        includeKeybindsAndVolume,
+        includeMultiplayerServers,
+        includeJeiData,
+        includeModConfigs,
+        includeResourcePacks,
+        includeShaderPacks,
+      });
+      setExportResult(res);
+      setScanSummary({
+        totalMods: res.totalMods,
+        modrinthMatched: res.modrinthMatched,
+        curseforgeMatched: res.curseforgeMatched,
+        unlistedMods: res.unlistedMods,
+      });
+    } catch (err) {
+      onError(String(err));
+    } finally {
+      setExporting(false);
+    }
+  };
 
   const handleOpenModsModal = async (inst: GameInstance) => {
     setModsModalInst(inst);
@@ -188,7 +261,7 @@ export function InstancesPage({
                     <Package className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => setEditingInst({ ...inst })}
+                    onClick={() => openConfigureModal(inst)}
                     className="p-2 rounded-sm bg-white/5 hover:bg-white/10 text-slate-300 transition-colors cursor-pointer"
                     title={t("instances.configure")}
                   >
@@ -259,7 +332,7 @@ export function InstancesPage({
                     <span>{t("instances.manageMods")}</span>
                   </button>
                   <button
-                    onClick={() => setEditingInst({ ...inst })}
+                    onClick={() => openConfigureModal(inst)}
                     className="p-1.5 rounded-sm bg-white/5 hover:bg-white/10 text-slate-300 transition-colors cursor-pointer"
                     title={t("instances.configure")}
                   >
@@ -286,21 +359,21 @@ export function InstancesPage({
         </div>
       )}
 
-      {/* Configure Instance Modal */}
+      {/* Configure Instance + Export Modal */}
       <AnimatePresence>
         {editingInst && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4"
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"
           >
             <motion.form
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
               onSubmit={handleSaveInstanceConfig}
-              className="w-full max-w-md rounded-sm bg-[#12181d] border border-white/15 p-6 space-y-4 shadow-2xl"
+              className="w-full max-w-lg max-h-[85vh] overflow-y-auto rounded-sm bg-[#12181d] border border-white/15 p-6 space-y-5 shadow-2xl"
             >
               <div className="flex items-center justify-between">
                 <h2 className="text-lg font-bold text-white">
@@ -315,83 +388,270 @@ export function InstancesPage({
                 </button>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">{t("instances.name")}</label>
-                <input
-                  required
-                  value={editingInst.name}
-                  onChange={(e) => setEditingInst({ ...editingInst, name: e.target.value })}
-                  className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-sm text-white focus:outline-none focus:border-emerald-500/60"
-                />
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">{t("instances.name")}</label>
+                  <input
+                    required
+                    value={editingInst.name}
+                    onChange={(e) => setEditingInst({ ...editingInst, name: e.target.value })}
+                    className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-sm text-white focus:outline-none focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-slate-300">
+                    {t("instances.javaOverride")}
+                  </label>
+                  <input
+                    value={editingInst.javaPath ?? ""}
+                    onChange={(e) =>
+                      setEditingInst({
+                        ...editingInst,
+                        javaPath: e.target.value.trim() || null,
+                      })
+                    }
+                    placeholder="Auto-match Java version based on Minecraft version"
+                    className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">
+                      {t("instances.maxMemoryOverride")}
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={32768}
+                      value={editingInst.maxMemoryMb ?? 0}
+                      onChange={(e) => {
+                        const val = Number(e.target.value);
+                        setEditingInst({
+                          ...editingInst,
+                          maxMemoryMb: val > 0 ? val : null,
+                        });
+                      }}
+                      className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-slate-300">
+                      {t("instances.jvmArgsOverride")}
+                    </label>
+                    <input
+                      value={editingInst.jvmArgs ?? ""}
+                      onChange={(e) =>
+                        setEditingInst({
+                          ...editingInst,
+                          jvmArgs: e.target.value.trim() || null,
+                        })
+                      }
+                      className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setEditingInst(null)}
+                    className="px-4 py-2 rounded-sm bg-white/5 hover:bg-white/10 text-xs text-slate-300 cursor-pointer"
+                  >
+                    {t("instances.cancel")}
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-5 py-2 rounded-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-xs cursor-pointer"
+                  >
+                    {t("instances.save")}
+                  </button>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
-                  {t("instances.javaOverride")}
-                </label>
-                <input
-                  value={editingInst.javaPath ?? ""}
-                  onChange={(e) =>
-                    setEditingInst({
-                      ...editingInst,
-                      javaPath: e.target.value.trim() || null,
-                    })
-                  }
-                  placeholder="Auto-match Java version based on Minecraft version"
-                  className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
+              {/* Export Instance Section (Bottom of Configure Modal) */}
+              <div className="pt-4 border-t border-white/15 space-y-3.5">
+                <div>
+                  <div className="flex items-center gap-2 text-sm font-bold text-emerald-300">
+                    <Archive className="w-4 h-4" />
+                    <span>{t("instances.export.title")}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1">{t("instances.export.desc")}</p>
+                </div>
 
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
-                  {t("instances.maxMemoryOverride")}
-                </label>
-                <input
-                  type="number"
-                  min={0}
-                  max={32768}
-                  value={editingInst.maxMemoryMb ?? 0}
-                  onChange={(e) => {
-                    const val = Number(e.target.value);
-                    setEditingInst({
-                      ...editingInst,
-                      maxMemoryMb: val > 0 ? val : null,
-                    });
-                  }}
-                  className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-slate-300">
-                  {t("instances.jvmArgsOverride")}
-                </label>
-                <input
-                  value={editingInst.jvmArgs ?? ""}
-                  onChange={(e) =>
-                    setEditingInst({
-                      ...editingInst,
-                      jvmArgs: e.target.value.trim() || null,
-                    })
-                  }
-                  className="w-full px-3.5 py-2 rounded-sm bg-[#0a0e11] border border-white/15 text-xs text-white font-mono focus:outline-none focus:border-emerald-500/60"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setEditingInst(null)}
-                  className="px-4 py-2 rounded-sm bg-white/5 hover:bg-white/10 text-sm text-slate-300 cursor-pointer"
+                {/* Option 1: Keep Original Settings + 6 Sub-options */}
+                <div
+                  className={`p-3.5 rounded-sm bg-[#0a0e11] border space-y-2.5 ${
+                    packageAllFiles ? "border-white/5 opacity-45" : "border-white/15"
+                  }`}
                 >
-                  {t("instances.cancel")}
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 rounded-sm bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-semibold text-sm cursor-pointer"
-                >
-                  {t("instances.save")}
-                </button>
+                  <label className="flex items-center gap-2.5 text-xs font-semibold text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      disabled={packageAllFiles}
+                      checked={keepSettings}
+                      onChange={(e) => setKeepSettings(e.target.checked)}
+                      className="accent-emerald-500 w-4 h-4"
+                    />
+                    <span>{t("instances.export.keepSettings")}</span>
+                  </label>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pl-6 pt-1">
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeKeybindsAndVolume}
+                        onChange={(e) => setIncludeKeybindsAndVolume(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.keybindsAndVolume")}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeMultiplayerServers}
+                        onChange={(e) => setIncludeMultiplayerServers(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.multiplayerServers")}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeJeiData}
+                        onChange={(e) => setIncludeJeiData(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.jeiData")}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeModConfigs}
+                        onChange={(e) => setIncludeModConfigs(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.modConfigs")}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeResourcePacks}
+                        onChange={(e) => setIncludeResourcePacks(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.resourcePacks")}</span>
+                    </label>
+
+                    <label className="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        disabled={packageAllFiles || !keepSettings}
+                        checked={includeShaderPacks}
+                        onChange={(e) => setIncludeShaderPacks(e.target.checked)}
+                        className="accent-emerald-500"
+                      />
+                      <span>{t("instances.export.shaderPacks")}</span>
+                    </label>
+                  </div>
+                </div>
+
+                {/* Option 2: Package All Files (with warning) */}
+                <div className="p-3.5 rounded-sm bg-[#0a0e11] border border-amber-500/30 space-y-1.5">
+                  <label className="flex items-center gap-2.5 text-xs font-semibold text-white cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={packageAllFiles}
+                      onChange={(e) => setPackageAllFiles(e.target.checked)}
+                      className="accent-amber-500 w-4 h-4"
+                    />
+                    <span>{t("instances.export.packageAll")}</span>
+                  </label>
+                  <div className="flex items-center gap-1.5 pl-6 text-[11px] text-amber-400">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{t("instances.export.packageAllWarning")}</span>
+                  </div>
+                </div>
+
+                {/* Mod Source Scan Summary */}
+                {scanSummary && (
+                  <div className="p-3 rounded-sm bg-[#0a0e11] border border-white/15 text-xs space-y-1.5">
+                    <div className="flex flex-wrap gap-3 text-slate-300 font-mono text-[11px]">
+                      <span>Total: {scanSummary.totalMods}</span>
+                      <span className="text-emerald-300">
+                        Modrinth: {scanSummary.modrinthMatched}
+                      </span>
+                      <span className="text-amber-300">
+                        CurseForge: {scanSummary.curseforgeMatched}
+                      </span>
+                      <span className="text-rose-300">
+                        Unlisted: {scanSummary.unlistedMods.length}
+                      </span>
+                    </div>
+                    {scanSummary.unlistedMods.length > 0 && (
+                      <div className="pt-1 border-t border-white/10">
+                        <div className="text-[11px] text-rose-300 font-semibold">
+                          {t("instances.export.unlistedNote")}:
+                        </div>
+                        <div className="text-[11px] text-slate-400 font-mono max-h-20 overflow-y-auto mt-0.5">
+                          {scanSummary.unlistedMods.join(", ")}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {exportResult && (
+                  <div className="p-3 rounded-sm bg-emerald-500/10 border border-emerald-500/40 text-xs text-emerald-200 space-y-1">
+                    <div className="flex items-center gap-1.5 font-semibold text-emerald-300">
+                      <Check className="w-4 h-4" />
+                      <span>Exported successfully!</span>
+                    </div>
+                    <div className="text-[11px] font-mono break-all text-slate-300">
+                      {exportResult.outputPath}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={scanningExport || exporting}
+                    onClick={handleScanExportMods}
+                    className="flex items-center gap-1.5 px-3.5 py-2 rounded-sm bg-white/5 hover:bg-white/10 border border-white/15 text-xs text-slate-200 font-medium cursor-pointer disabled:opacity-50"
+                  >
+                    <SearchCheck className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>
+                      {scanningExport
+                        ? t("instances.export.scanningMods")
+                        : t("instances.export.scanMods")}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={exporting || scanningExport}
+                    onClick={handleExportInstance}
+                    className="flex items-center gap-2 px-4 py-2 rounded-sm bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-bold text-xs cursor-pointer"
+                  >
+                    <Archive className="w-3.5 h-3.5" />
+                    <span>
+                      {exporting
+                        ? t("instances.export.exporting")
+                        : t("instances.export.exportBtn")}
+                    </span>
+                  </button>
+                </div>
               </div>
             </motion.form>
           </motion.div>

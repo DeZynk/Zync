@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod config;
 pub mod error;
+pub mod export;
 pub mod instances;
 pub mod java;
 pub mod loaders;
@@ -33,6 +34,8 @@ pub fn run() {
             mods::list_installed_mods,
             mods::toggle_mod,
             mods::delete_mod,
+            export::scan_instance_mods_for_export,
+            export::export_instance,
             auth::add_offline_account,
             auth::remove_account,
             auth::set_active_account,

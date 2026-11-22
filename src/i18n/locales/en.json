@@ -45,7 +45,25 @@
     "save": "Save Changes",
     "cancel": "Cancel",
     "installedModsTitle": "Installed Mods",
-    "noModsInstalled": "No mods installed in this instance."
+    "noModsInstalled": "No mods installed in this instance.",
+    "export": {
+      "title": "Export Instance",
+      "desc": "Automatically checks Modrinth and CurseForge before exporting. Any mods not listed on either platform are bundled directly.",
+      "keepSettings": "Keep Original Settings",
+      "keybindsAndVolume": "Keybinds & Volume",
+      "multiplayerServers": "Multiplayer Server List",
+      "jeiData": "JEI Bookmarks & Search History",
+      "modConfigs": "Mod Configs (config folder)",
+      "resourcePacks": "Resource Packs",
+      "shaderPacks": "Shader Packs",
+      "packageAll": "Package All Files",
+      "packageAllWarning": "Warning: May violate mod redistribution terms",
+      "scanMods": "Check Mod Sources",
+      "scanningMods": "Checking Modrinth & CurseForge...",
+      "exportBtn": "Export (.mrpack)",
+      "exporting": "Verifying Mods & Exporting...",
+      "unlistedNote": "Unlisted mods (will be bundled directly)"
+    }
   },
   "download": {
     "title": "Download Center",
