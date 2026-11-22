@@ -1,0 +1,132 @@
+{
+  "app": {
+    "name": "Zync",
+    "tagline": "Lightweight Minecraft Launcher"
+  },
+  "nav": {
+    "play": "Play",
+    "instances": "Instances",
+    "download": "Download",
+    "java": "Java",
+    "settings": "Settings"
+  },
+  "play": {
+    "readyToLaunch": "Ready to Launch",
+    "launching": "Launching...",
+    "running": "Game Running",
+    "launchGame": "Launch Minecraft",
+    "killInstance": "Kill Instance",
+    "launchFailed": "Launch Failed",
+    "noInstanceTitle": "No Instance Selected",
+    "noInstanceDesc": "Download and create your first Minecraft instance in the Download tab.",
+    "createFirst": "Go to Download",
+    "selectInstance": "Active Instance",
+    "console": "Game Console",
+    "clearLogs": "Clear",
+    "account": "Account",
+    "guest": "Offline Guest (Player)"
+  },
+  "instances": {
+    "title": "Manage Instances",
+    "subtitle": "Manage your installed instances, configure memory/Java overrides, and toggle installed mods.",
+    "viewGrid": "Grid",
+    "viewList": "List",
+    "launch": "Launch",
+    "manageMods": "Mods",
+    "configure": "Configure",
+    "openFolder": "Open Folder",
+    "delete": "Delete",
+    "empty": "No instances installed yet.",
+    "goToDownload": "Download a Game Instance",
+    "name": "Instance Name",
+    "javaOverride": "Java Path Override (Leave empty for Smart Auto-Match)",
+    "maxMemoryOverride": "Max RAM Override (MB, 0 = use global)",
+    "jvmArgsOverride": "Custom JVM Arguments (Leave empty for global)",
+    "save": "Save Changes",
+    "cancel": "Cancel",
+    "installedModsTitle": "Installed Mods",
+    "noModsInstalled": "No mods installed in this instance."
+  },
+  "download": {
+    "title": "Download Center",
+    "subtitle": "Download game versions, Java runtimes, mods, resource packs, modpacks, and shaders.",
+    "tabs": {
+      "game": "Game",
+      "java": "Java",
+      "mod": "Mods",
+      "resourcepack": "Resource Packs",
+      "modpack": "Modpacks",
+      "shader": "Shaders"
+    },
+    "game": {
+      "title": "Install New Minecraft Instance",
+      "name": "Instance Name",
+      "namePlaceholder": "e.g. Survival 1.21.4",
+      "mcVersion": "Minecraft Version",
+      "showSnapshots": "Include Snapshots",
+      "loader": "Mod Loader",
+      "loaderVersion": "Loader Version",
+      "createBtn": "Download & Create Instance",
+      "creating": "Creating..."
+    },
+    "java": {
+      "title": "Download Eclipse Adoptium (Temurin) JRE",
+      "desc": "Install official portable Java runtimes directly into Zync's managed runtime folder. Zync automatically matches the right Java version for each Minecraft version.",
+      "installBtn": "Download Java {{version}}",
+      "installing": "Downloading..."
+    },
+    "content": {
+      "source": "Source",
+      "targetInstance": "Target Instance",
+      "filterByVersion": "Match Instance Version",
+      "searchPlaceholder": "Search {{type}}...",
+      "search": "Search",
+      "install": "Install",
+      "installModpack": "Install Modpack",
+      "installing": "Installing...",
+      "installed": "Installed",
+      "downloads": "downloads",
+      "by": "by",
+      "noInstanceWarn": "Create an instance in the 'Game' tab first before installing content."
+    }
+  },
+  "java": {
+    "title": "Java Environments",
+    "subtitle": "Manage detected Java runtimes on your system.",
+    "autoMatchBanner": "Smart Auto-Match Enabled: Zync automatically selects Java 8 for MC <= 1.16.5, Java 17 for MC 1.17–1.20.4, and Java 21 for MC 1.20.5+.",
+    "scan": "Refresh",
+    "scanning": "Refreshing...",
+    "detected": "Detected Runtimes",
+    "goToDownload": "Download Java",
+    "setDefault": "Set Fallback Default",
+    "defaultBadge": "Default",
+    "managedBadge": "Managed",
+    "noJava": "Click 'Refresh' to scan installed Java runtimes, or click 'Download Java' to install one."
+  },
+  "settings": {
+    "title": "Settings",
+    "subtitle": "Stored externally in zync-config.json next to the executable.",
+    "general": "General & Language",
+    "language": "Language",
+    "animations": "Enable Smooth Animations",
+    "closeOnLaunch": "Close Launcher on Game Launch",
+    "dataDir": "Data Directory",
+    "javaMemory": "Java & Performance",
+    "minMemory": "Minimum RAM (MB)",
+    "maxMemory": "Maximum RAM (MB)",
+    "jvmArgs": "JVM Arguments",
+    "concurrentDownloads": "Max Concurrent Downloads",
+    "windowSize": "Game Window Resolution",
+    "accounts": "Accounts",
+    "addOffline": "Add Offline Profile",
+    "offlinePlaceholder": "Username (1-16 chars)",
+    "msLogin": "Sign in with Microsoft Account",
+    "copyCode": "Copy Code",
+    "copied": "Copied!",
+    "waitingAuth": "Waiting for you to paste the code and complete sign-in in your browser...",
+    "configSection": "External Configuration",
+    "openConfigFolder": "Open Config Folder",
+    "save": "Save Settings",
+    "saved": "Saved!"
+  }
+}

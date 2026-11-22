@@ -1,0 +1,14 @@
+# Dependencies & build outputs
+node_modules/
+dist/
+src-tauri/target/
+
+# User runtime config & data
+zync-config.json
+ZyncData/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
