@@ -25,6 +25,8 @@ export interface LauncherConfig {
   windowHeight: number;
   closeOnLaunch: boolean;
   enableAnimations: boolean;
+  instancesViewStyle: "grid" | "list";
+  sidebarCollapsed: boolean;
   activeInstanceId?: string | null;
   activeAccountId?: string | null;
   accounts: Account[];

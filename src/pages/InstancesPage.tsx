@@ -28,6 +28,8 @@ import type {
 interface InstancesPageProps {
   instances: GameInstance[];
   activeInstanceId?: string | null;
+  viewStyle: "grid" | "list";
+  onChangeViewStyle: (style: "grid" | "list") => void;
   onSelectAndLaunch: (id: string) => void;
   onGoToDownloadGame: () => void;
   onRefresh: () => Promise<void>;
@@ -37,13 +39,14 @@ interface InstancesPageProps {
 export function InstancesPage({
   instances,
   activeInstanceId,
+  viewStyle,
+  onChangeViewStyle,
   onSelectAndLaunch,
   onGoToDownloadGame,
   onRefresh,
   onError,
 }: InstancesPageProps) {
   const { t } = useTranslation();
-  const [viewStyle, setViewStyle] = useState<"grid" | "list">("grid");
 
   // Configure Instance + Export Modal State
   const [editingInst, setEditingInst] = useState<GameInstance | null>(null);
@@ -181,7 +184,7 @@ export function InstancesPage({
         <div className="inline-flex rounded-sm bg-[#11171c] border border-white/15 p-1">
           <button
             type="button"
-            onClick={() => setViewStyle("grid")}
+            onClick={() => onChangeViewStyle("grid")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors cursor-pointer ${
               viewStyle === "grid"
                 ? "bg-emerald-500 text-slate-950"
@@ -193,7 +196,7 @@ export function InstancesPage({
           </button>
           <button
             type="button"
-            onClick={() => setViewStyle("list")}
+            onClick={() => onChangeViewStyle("list")}
             className={`flex items-center gap-1.5 px-3 py-1.5 rounded-sm text-xs font-semibold transition-colors cursor-pointer ${
               viewStyle === "list"
                 ? "bg-emerald-500 text-slate-950"

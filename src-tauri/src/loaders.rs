@@ -1,10 +1,10 @@
 use crate::error::{AppError, AppResult};
-use crate::instances::{shared_mc_root, LoaderType};
+use crate::instances::LoaderType;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -175,29 +175,75 @@ pub async fn fetch_fabric_or_quilt_profile(
     Ok(json)
 }
 
-/// Ensures Forge or NeoForge is installed into shared_mc_root using the official installer.
+fn find_installed_loader_json(
+    mc_dir: &Path,
+    loader: &LoaderType,
+    mc_version: &str,
+    loader_version: &str,
+) -> Option<PathBuf> {
+    let versions_dir = mc_dir.join("versions");
+    let candidates = match loader {
+        LoaderType::NeoForge => vec![format!("neoforge-{loader_version}")],
+        LoaderType::Forge => vec![
+            format!("{mc_version}-forge-{loader_version}"),
+            format!("{mc_version}-forge{mc_version}-{loader_version}"),
+            format!("{mc_version}-Forge{loader_version}"),
+        ],
+        _ => Vec::new(),
+    };
+
+    for vid in candidates {
+        let p = versions_dir.join(&vid).join(format!("{vid}.json"));
+        if p.exists() {
+            return Some(p);
+        }
+    }
+
+    // Fallback scan for any version folder matching both mc_version and loader_version
+    if let Ok(entries) = fs::read_dir(&versions_dir) {
+        for entry in entries.flatten() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let lower = name.to_lowercase();
+            let is_match = match loader {
+                LoaderType::NeoForge => lower.contains("neoforge") && name.contains(loader_version),
+                LoaderType::Forge => {
+                    lower.contains("forge")
+                        && !lower.contains("neoforge")
+                        && name.contains(loader_version)
+                }
+                _ => false,
+            };
+            if is_match {
+                let p = entry.path().join(format!("{name}.json"));
+                if p.exists() {
+                    return Some(p);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Ensures Forge or NeoForge is installed directly into the instance's `.minecraft` directory.
 pub async fn ensure_forge_or_neoforge_installed(
+    mc_dir: &Path,
     loader: &LoaderType,
     mc_version: &str,
     loader_version: &str,
     java_exe: &str,
 ) -> AppResult<PathBuf> {
-    let shared = shared_mc_root()?;
+    if let Some(existing) = find_installed_loader_json(mc_dir, loader, mc_version, loader_version) {
+        return Ok(existing);
+    }
+
     let version_id = match loader {
         LoaderType::NeoForge => format!("neoforge-{loader_version}"),
         LoaderType::Forge => format!("{mc_version}-forge-{loader_version}"),
         _ => return Err(AppError::Message("Not a Forge/NeoForge loader".to_string())),
     };
 
-    let version_json_path = shared
-        .join("versions")
-        .join(&version_id)
-        .join(format!("{version_id}.json"));
-    if version_json_path.exists() {
-        return Ok(version_json_path);
-    }
-
-    let profiles_path = shared.join("launcher_profiles.json");
+    let profiles_path = mc_dir.join("launcher_profiles.json");
     if !profiles_path.exists() {
         fs::write(&profiles_path, r#"{"profiles":{}}"#)?;
     }
@@ -223,7 +269,7 @@ pub async fn ensure_forge_or_neoforge_installed(
         .bytes()
         .await?;
 
-    let tmp_dir = shared.join("tmp");
+    let tmp_dir = mc_dir.join("tmp");
     fs::create_dir_all(&tmp_dir)?;
     let installer_path = tmp_dir.join(format!("{version_id}-installer.jar"));
     fs::write(&installer_path, &bytes)?;
@@ -232,7 +278,7 @@ pub async fn ensure_forge_or_neoforge_installed(
     cmd.arg("-jar")
         .arg(&installer_path)
         .arg("--installClient")
-        .arg(&shared);
+        .arg(mc_dir);
     #[cfg(target_os = "windows")]
     cmd.creation_flags(CREATE_NO_WINDOW);
 
@@ -240,18 +286,18 @@ pub async fn ensure_forge_or_neoforge_installed(
     let _ = fs::remove_file(&installer_path);
 
     if !output.status.success() {
-        let err = String::from_utf8_lossy(&output.stderr);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let detail = if stderr.trim().is_empty() { stdout } else { stderr };
         return Err(AppError::Message(format!(
-            "Mod loader installer failed: {err}"
+            "Mod loader installer failed: {detail}"
         )));
     }
 
-    if !version_json_path.exists() {
-        return Err(AppError::Message(format!(
-            "Installer finished but version JSON not found at {}",
-            version_json_path.display()
-        )));
-    }
-
-    Ok(version_json_path)
+    find_installed_loader_json(mc_dir, loader, mc_version, loader_version).ok_or_else(|| {
+        AppError::Message(format!(
+            "Installer finished but version JSON for {version_id} was not found in {}",
+            mc_dir.join("versions").display()
+        ))
+    })
 }

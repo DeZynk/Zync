@@ -39,14 +39,6 @@ pub fn instances_root() -> AppResult<PathBuf> {
     Ok(dir)
 }
 
-pub fn shared_mc_root() -> AppResult<PathBuf> {
-    let config = read_config()?;
-    let data_dir = resolve_data_dir(&config)?;
-    let dir = data_dir.join("shared");
-    fs::create_dir_all(&dir)?;
-    Ok(dir)
-}
-
 pub fn instance_dir(id: &str) -> AppResult<PathBuf> {
     Ok(instances_root()?.join(id))
 }

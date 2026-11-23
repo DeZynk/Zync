@@ -1,6 +1,6 @@
 use crate::config::{read_config, write_config, AccountType};
 use crate::error::{AppError, AppResult};
-use crate::instances::{instance_mc_dir, load_instance, save_instance, shared_mc_root, LoaderType};
+use crate::instances::{instance_mc_dir, load_instance, save_instance, LoaderType};
 use crate::java::{inspect_java_executable, scan_java_runtimes, DownloadProgress};
 use crate::loaders::{ensure_forge_or_neoforge_installed, fetch_fabric_or_quilt_profile};
 use futures_util::stream::{self, StreamExt};
@@ -52,7 +52,9 @@ pub fn kill_instance(app: AppHandle) -> AppResult<()> {
     };
 
     if pids.is_empty() {
-        return Err(AppError::Message("No running game instance to kill".to_string()));
+        return Err(AppError::Message(
+            "No running game instance to kill".to_string(),
+        ));
     }
 
     for pid in pids {
@@ -65,7 +67,10 @@ pub fn kill_instance(app: AppHandle) -> AppResult<()> {
         }
     }
 
-    let _ = app.emit("game-log", "[Zync] Game instance terminated by user.".to_string());
+    let _ = app.emit(
+        "game-log",
+        "[Zync] Game instance terminated by user.".to_string(),
+    );
     Ok(())
 }
 
@@ -114,15 +119,24 @@ fn rule_allows_windows(rules: Option<&Vec<Value>>) -> bool {
     let mut allowed = false;
     for rule in rules {
         let action = rule["action"].as_str().unwrap_or("allow");
+        if rule.get("features").is_some() {
+            continue;
+        }
         let os_match = if let Some(os) = rule.get("os") {
-            os["name"].as_str() == Some("windows")
+            let name_ok = os
+                .get("name")
+                .and_then(|v| v.as_str())
+                .map(|n| n == "windows")
+                .unwrap_or(true);
+            let arch_ok = os
+                .get("arch")
+                .and_then(|v| v.as_str())
+                .map(|a| a == "x86_64" || a == "amd64" || a == "x64")
+                .unwrap_or(true);
+            name_ok && arch_ok
         } else {
             true
         };
-        let has_features = rule.get("features").is_some();
-        if has_features {
-            continue;
-        }
         if os_match {
             allowed = action == "allow";
         }
@@ -170,6 +184,32 @@ fn maven_name_to_path(name: &str) -> Option<String> {
     Some(format!(
         "{group}/{artifact}/{version}/{artifact}-{version}{classifier}.{final_ext}"
     ))
+}
+
+fn collect_arg_entries(arr: Option<&Vec<Value>>, out: &mut Vec<String>) {
+    let Some(items) = arr else {
+        return;
+    };
+    for item in items {
+        if let Some(s) = item.as_str() {
+            out.push(s.to_string());
+        } else if let Some(obj) = item.as_object() {
+            if !rule_allows_windows(obj.get("rules").and_then(|r| r.as_array())) {
+                continue;
+            }
+            if let Some(val) = obj.get("value") {
+                if let Some(s) = val.as_str() {
+                    out.push(s.to_string());
+                } else if let Some(list) = val.as_array() {
+                    for v in list {
+                        if let Some(s) = v.as_str() {
+                            out.push(s.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 fn infer_required_java_major(mc_version: &str, vanilla_json: &Value) -> u32 {
@@ -347,7 +387,8 @@ pub async fn list_minecraft_versions(include_snapshots: bool) -> AppResult<Vec<M
 pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<()> {
     let config = read_config()?;
     let mut instance = load_instance(&instance_id)?;
-    let shared = shared_mc_root()?;
+
+    // Full instance isolation: every instance owns its own versions/, libraries/, assets/, natives/
     let game_dir = instance_mc_dir(&instance_id)?;
 
     let client = reqwest::Client::builder()
@@ -364,8 +405,8 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
         },
     );
 
-    // 1. Fetch or load vanilla version.json
-    let vanilla_dir = shared.join("versions").join(&instance.mc_version);
+    // 1. Fetch or load vanilla version.json inside this instance's .minecraft/versions/
+    let vanilla_dir = game_dir.join("versions").join(&instance.mc_version);
     fs::create_dir_all(&vanilla_dir)?;
     let vanilla_json_path = vanilla_dir.join(format!("{}.json", instance.mc_version));
 
@@ -422,15 +463,13 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
             );
             rt.path.clone()
         } else {
-            // Note: Legacy Forge (<= 1.16.5) strictly requires Java 8
             if required_major == 8 && instance.loader == LoaderType::Forge {
                 return Err(AppError::Message(format!(
-                    "Minecraft {} with Forge strictly requires Java 8, which is not installed. Please go to Download -> Java and click 'Install Java 8'.",
+                    "Minecraft {} with Forge strictly requires Java 8, which is not installed. Please go to Download -> Java and click 'Download Java 8'.",
                     instance.mc_version
                 )));
             }
 
-            // Priority 2: User's default Java if its major_version >= required_major
             let default_ok = config
                 .default_java_path
                 .as_ref()
@@ -473,7 +512,7 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
     let mut classpath_entries: Vec<PathBuf> = Vec::new();
     let mut native_jars: Vec<PathBuf> = Vec::new();
     let mut seen_artifacts: HashSet<String> = HashSet::new();
-    let libraries_dir = shared.join("libraries");
+    let libraries_dir = game_dir.join("libraries");
 
     // Client JAR
     let client_jar = vanilla_dir.join(format!("{}.jar", instance.mc_version));
@@ -497,70 +536,88 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
             }
             let lib_name = lib["name"].as_str().unwrap_or("");
             let artifact_key = maven_artifact_key(lib_name);
+            let has_downloads_block = lib.get("downloads").is_some();
+            let has_natives_block = lib.get("natives").is_some();
 
+            // A. Standard artifact JAR (do NOT `continue;` on duplicate so classifiers below still run!)
             if let Some(artifact) = lib["downloads"]["artifact"].as_object() {
                 if let (Some(url), Some(path)) = (
                     artifact.get("url").and_then(|v| v.as_str()),
                     artifact.get("path").and_then(|v| v.as_str()),
                 ) {
-                    if let Some(key) = &artifact_key {
-                        if !seen_artifacts.insert(key.clone()) {
-                            continue;
+                    let is_new = artifact_key
+                        .as_ref()
+                        .map(|k| seen_artifacts.insert(k.clone()))
+                        .unwrap_or(true);
+                    if is_new {
+                        let dest = libraries_dir.join(path);
+                        classpath_entries.push(dest.clone());
+                        if !url.is_empty() {
+                            download_tasks.push(DownloadTask {
+                                url: url.to_string(),
+                                dest,
+                                sha1: artifact
+                                    .get("sha1")
+                                    .and_then(|v| v.as_str())
+                                    .map(String::from),
+                            });
                         }
                     }
-                    let dest = libraries_dir.join(path);
-                    classpath_entries.push(dest.clone());
-                    if !url.is_empty() {
+                }
+            } else if !has_downloads_block && !has_natives_block && !lib_name.is_empty() {
+                // Maven-style entry without a Mojang `downloads` object (Fabric / Quilt / legacy Forge)
+                let is_new = artifact_key
+                    .as_ref()
+                    .map(|k| seen_artifacts.insert(k.clone()))
+                    .unwrap_or(true);
+                if is_new {
+                    if let Some(rel_path) = maven_name_to_path(lib_name) {
+                        let base = lib["url"].as_str().unwrap_or(default_repo);
+                        let base_trimmed = base.trim_end_matches('/');
+                        let dest = libraries_dir.join(&rel_path);
+                        classpath_entries.push(dest.clone());
                         download_tasks.push(DownloadTask {
-                            url: url.to_string(),
+                            url: format!("{base_trimmed}/{rel_path}"),
                             dest,
-                            sha1: artifact
-                                .get("sha1")
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
+                            sha1: None,
                         });
                     }
-                }
-            } else if !lib_name.is_empty() {
-                if let Some(key) = &artifact_key {
-                    if !seen_artifacts.insert(key.clone()) {
-                        continue;
-                    }
-                }
-                if let Some(rel_path) = maven_name_to_path(lib_name) {
-                    let base = lib["url"].as_str().unwrap_or(default_repo);
-                    let base_trimmed = base.trim_end_matches('/');
-                    let dest = libraries_dir.join(&rel_path);
-                    classpath_entries.push(dest.clone());
-                    download_tasks.push(DownloadTask {
-                        url: format!("{base_trimmed}/{rel_path}"),
-                        dest,
-                        sha1: None,
-                    });
                 }
             }
 
-            // Windows natives classifier
+            // B. Windows natives classifier (ALWAYS evaluated even if artifact was deduplicated!)
             if let Some(classifiers) = lib["downloads"]["classifiers"].as_object() {
-                let native_key = lib["natives"]["windows"]
+                let win_native_key = lib["natives"]["windows"]
                     .as_str()
                     .map(|k| k.replace("${arch}", "64"));
-                let key = native_key.as_deref().unwrap_or("natives-windows");
-                if let Some(native_obj) = classifiers.get(key).and_then(|v| v.as_object()) {
-                    if let (Some(url), Some(path)) = (
-                        native_obj.get("url").and_then(|v| v.as_str()),
-                        native_obj.get("path").and_then(|v| v.as_str()),
-                    ) {
-                        let dest = libraries_dir.join(path);
-                        native_jars.push(dest.clone());
-                        download_tasks.push(DownloadTask {
-                            url: url.to_string(),
-                            dest,
-                            sha1: native_obj
-                                .get("sha1")
-                                .and_then(|v| v.as_str())
-                                .map(String::from),
-                        });
+
+                let target_key = if let Some(k) = win_native_key {
+                    Some(k)
+                } else if !has_natives_block && classifiers.contains_key("natives-windows") {
+                    Some("natives-windows".to_string())
+                } else {
+                    None
+                };
+
+                if let Some(key) = target_key {
+                    if let Some(native_obj) = classifiers.get(&key).and_then(|v| v.as_object()) {
+                        if let (Some(url), Some(path)) = (
+                            native_obj.get("url").and_then(|v| v.as_str()),
+                            native_obj.get("path").and_then(|v| v.as_str()),
+                        ) {
+                            let dest = libraries_dir.join(path);
+                            native_jars.push(dest.clone());
+                            if !url.is_empty() {
+                                download_tasks.push(DownloadTask {
+                                    url: url.to_string(),
+                                    dest,
+                                    sha1: native_obj
+                                        .get("sha1")
+                                        .and_then(|v| v.as_str())
+                                        .map(String::from),
+                                });
+                            }
+                        }
                     }
                 }
             }
@@ -574,6 +631,9 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
         .to_string();
     let mut extra_jvm_args: Vec<String> = Vec::new();
     let mut extra_game_args: Vec<String> = Vec::new();
+    let mut legacy_mc_args: Option<String> = vanilla_json["minecraftArguments"]
+        .as_str()
+        .map(String::from);
 
     match instance.loader {
         LoaderType::Vanilla => {}
@@ -585,6 +645,9 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
                 if let Some(mc) = profile["mainClass"].as_str() {
                     main_class = mc.to_string();
                 }
+                if let Some(legacy) = profile["minecraftArguments"].as_str() {
+                    legacy_mc_args = Some(legacy.to_string());
+                }
                 if let Some(libs) = profile["libraries"].as_array() {
                     let default_repo = if instance.loader == LoaderType::Fabric {
                         "https://maven.fabricmc.net"
@@ -593,20 +656,11 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
                     };
                     collect_libs(libs, default_repo);
                 }
-                if let Some(jvm) = profile["arguments"]["jvm"].as_array() {
-                    for arg in jvm {
-                        if let Some(s) = arg.as_str() {
-                            extra_jvm_args.push(s.to_string());
-                        }
-                    }
-                }
-                if let Some(game) = profile["arguments"]["game"].as_array() {
-                    for arg in game {
-                        if let Some(s) = arg.as_str() {
-                            extra_game_args.push(s.to_string());
-                        }
-                    }
-                }
+                collect_arg_entries(profile["arguments"]["jvm"].as_array(), &mut extra_jvm_args);
+                collect_arg_entries(
+                    profile["arguments"]["game"].as_array(),
+                    &mut extra_game_args,
+                );
             }
         }
         LoaderType::Forge | LoaderType::NeoForge => {
@@ -621,6 +675,7 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
                     },
                 );
                 let loader_json_path = ensure_forge_or_neoforge_installed(
+                    &game_dir,
                     &instance.loader,
                     &instance.mc_version,
                     lv,
@@ -632,23 +687,20 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
                 if let Some(mc) = loader_json["mainClass"].as_str() {
                     main_class = mc.to_string();
                 }
+                if let Some(legacy) = loader_json["minecraftArguments"].as_str() {
+                    legacy_mc_args = Some(legacy.to_string());
+                }
                 if let Some(libs) = loader_json["libraries"].as_array() {
-                    collect_libs(libs, "https://libraries.minecraft.net");
+                    collect_libs(libs, "https://maven.minecraftforge.net");
                 }
-                if let Some(jvm) = loader_json["arguments"]["jvm"].as_array() {
-                    for arg in jvm {
-                        if let Some(s) = arg.as_str() {
-                            extra_jvm_args.push(s.to_string());
-                        }
-                    }
-                }
-                if let Some(game) = loader_json["arguments"]["game"].as_array() {
-                    for arg in game {
-                        if let Some(s) = arg.as_str() {
-                            extra_game_args.push(s.to_string());
-                        }
-                    }
-                }
+                collect_arg_entries(
+                    loader_json["arguments"]["jvm"].as_array(),
+                    &mut extra_jvm_args,
+                );
+                collect_arg_entries(
+                    loader_json["arguments"]["game"].as_array(),
+                    &mut extra_game_args,
+                );
             }
         }
     }
@@ -660,8 +712,8 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
 
     classpath_entries.push(client_jar);
 
-    // 5. Asset index & objects
-    let assets_dir = shared.join("assets");
+    // 5. Asset index & objects inside this instance's .minecraft/assets/
+    let assets_dir = game_dir.join("assets");
     let asset_index_id = vanilla_json["assetIndex"]["id"]
         .as_str()
         .unwrap_or(&instance.mc_version)
@@ -714,8 +766,8 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
     )
     .await?;
 
-    // 7. Extract natives
-    let natives_dir = shared.join("natives").join(&instance.mc_version);
+    // 7. Extract natives into this instance's .minecraft/natives/<version>/
+    let natives_dir = game_dir.join("natives").join(&instance.mc_version);
     for jar in &native_jars {
         extract_natives_jar(jar, &natives_dir)?;
     }
@@ -775,6 +827,15 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
     );
     vars.insert("${classpath_separator}", ";".to_string());
     vars.insert("${version_name}", instance.mc_version.clone());
+    vars.insert("${version_type}", "release".to_string());
+    vars.insert("${auth_player_name}", username.clone());
+    vars.insert("${auth_uuid}", uuid.clone());
+    vars.insert("${auth_access_token}", access_token.clone());
+    vars.insert("${user_type}", user_type.to_string());
+    vars.insert("${user_properties}", "{}".to_string());
+    vars.insert("${game_directory}", game_dir.to_string_lossy().to_string());
+    vars.insert("${assets_root}", assets_dir.to_string_lossy().to_string());
+    vars.insert("${assets_index_name}", asset_index_id.clone());
 
     let substitute = |s: &str| -> String {
         let mut out = s.to_string();
@@ -807,31 +868,43 @@ pub async fn launch_instance(app: AppHandle, instance_id: String) -> AppResult<(
     cmd.arg(&cp_str);
     cmd.arg(&main_class);
 
-    cmd.args([
-        "--username",
-        &username,
-        "--version",
-        &instance.mc_version,
-        "--gameDir",
-        &game_dir.to_string_lossy(),
-        "--assetsDir",
-        &assets_dir.to_string_lossy(),
-        "--assetIndex",
-        &asset_index_id,
-        "--uuid",
-        &uuid,
-        "--accessToken",
-        &access_token,
-        "--userType",
-        user_type,
-        "--width",
-        &config.window_width.to_string(),
-        "--height",
-        &config.window_height.to_string(),
-    ]);
+    if let Some(legacy_str) = legacy_mc_args {
+        for token in legacy_str.split_whitespace() {
+            cmd.arg(substitute(token));
+        }
+        cmd.args([
+            "--width",
+            &config.window_width.to_string(),
+            "--height",
+            &config.window_height.to_string(),
+        ]);
+    } else {
+        cmd.args([
+            "--username",
+            &username,
+            "--version",
+            &instance.mc_version,
+            "--gameDir",
+            &game_dir.to_string_lossy(),
+            "--assetsDir",
+            &assets_dir.to_string_lossy(),
+            "--assetIndex",
+            &asset_index_id,
+            "--uuid",
+            &uuid,
+            "--accessToken",
+            &access_token,
+            "--userType",
+            user_type,
+            "--width",
+            &config.window_width.to_string(),
+            "--height",
+            &config.window_height.to_string(),
+        ]);
+    }
 
     for arg in &extra_game_args {
-        cmd.arg(arg);
+        cmd.arg(substitute(arg));
     }
 
     cmd.stdout(Stdio::piped()).stderr(Stdio::piped());

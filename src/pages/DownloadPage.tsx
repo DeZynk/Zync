@@ -332,6 +332,8 @@ export function DownloadPage({
                   value={selectedMc}
                   onChange={setSelectedMc}
                   disabled={loadingVersions}
+                  searchable
+                  searchPlaceholder="Search version (e.g. 1.20.1, 1.8.9)..."
                   placeholder="Loading versions..."
                   options={mcVersions.map((v) => ({
                     value: v.id,
@@ -348,6 +350,8 @@ export function DownloadPage({
                   <CustomSelect
                     value={selectedLoaderVer}
                     onChange={setSelectedLoaderVer}
+                    searchable
+                    searchPlaceholder="Search loader version..."
                     placeholder={`No loader versions for ${selectedMc}`}
                     options={loaderVersions.map((lv) => ({
                       value: lv.version,

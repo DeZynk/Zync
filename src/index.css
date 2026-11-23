@@ -3,6 +3,20 @@
 @layer base {
   :root {
     color-scheme: dark;
+    background-color: #0d1114;
+  }
+
+  html,
+  body {
+    background-color: #0d1114;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  input,
+  textarea {
+    user-select: text;
+    -webkit-user-select: text;
   }
 
   * {

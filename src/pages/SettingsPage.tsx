@@ -310,27 +310,36 @@ export function SettingsPage({
               return (
                 <div
                   key={acc.id}
-                  className={`flex items-center justify-between p-3 rounded-sm border ${
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => api.setActiveAccount(acc.id).then(onReloadConfig)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      api.setActiveAccount(acc.id).then(onReloadConfig);
+                    }
+                  }}
+                  className={`flex items-center justify-between p-3 rounded-sm border transition-colors cursor-pointer ${
                     active
                       ? "bg-emerald-500/10 border-emerald-500/40"
-                      : "bg-[#0a0e11] border-white/10"
+                      : "bg-[#0a0e11] border-white/10 hover:border-white/25 hover:bg-white/[0.02]"
                   }`}
                 >
-                  <button
-                    type="button"
-                    onClick={() => api.setActiveAccount(acc.id).then(onReloadConfig)}
-                    className="flex items-center gap-2.5 text-left cursor-pointer"
-                  >
-                    <User className="w-4 h-4 text-emerald-400" />
-                    <div>
-                      <div className="text-xs font-semibold text-white">{acc.username}</div>
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    <User className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-white truncate">{acc.username}</div>
                       <div className="text-[11px] text-slate-400 capitalize">{acc.accountType}</div>
                     </div>
-                  </button>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => api.removeAccount(acc.id).then(onReloadConfig)}
-                    className="p-1.5 rounded-sm text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      api.removeAccount(acc.id).then(onReloadConfig);
+                    }}
+                    title="Remove Account"
+                    className="relative z-10 p-1.5 rounded-sm text-slate-400 hover:text-rose-400 hover:bg-rose-500/15 cursor-pointer shrink-0 transition-colors"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

@@ -431,13 +431,22 @@ pub async fn export_instance(options: ExportOptions) -> AppResult<ExportResult> 
     let mut index_files: Vec<Value> = Vec::new();
 
     if options.package_all_files {
-        // Package all files directly inside overrides/ (skipping transient logs/crash-reports)
+        // Package all instance gameplay files directly inside overrides/ (skipping engine & transient folders)
         add_dir_to_zip(
             &mut zip,
             &mut written,
             &mc_dir,
             "overrides",
-            &["logs", "crash-reports", "debug"],
+            &[
+                "versions",
+                "libraries",
+                "assets",
+                "natives",
+                "tmp",
+                "logs",
+                "crash-reports",
+                "debug",
+            ],
         )?;
         bundled_directly = scanned_mods.len();
     } else {

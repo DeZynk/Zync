@@ -140,6 +140,15 @@ export function App() {
           onSelectTab={setActiveTab}
           activeAccount={activeAccount}
           enableAnimations={enableAnimations}
+          collapsed={config?.sidebarCollapsed ?? false}
+          onToggleCollapse={() => {
+            if (config) {
+              handleUpdateConfig({
+                ...config,
+                sidebarCollapsed: !config.sidebarCollapsed,
+              }).catch((e) => setErrorMsg(String(e)));
+            }
+          }}
         />
 
         <main className="flex-1 min-w-0 p-6 overflow-hidden relative">
@@ -172,6 +181,14 @@ export function App() {
                 <InstancesPage
                   instances={instances}
                   activeInstanceId={activeInstance?.id}
+                  viewStyle={config?.instancesViewStyle === "list" ? "list" : "grid"}
+                  onChangeViewStyle={(style) => {
+                    if (config) {
+                      handleUpdateConfig({ ...config, instancesViewStyle: style }).catch((e) =>
+                        setErrorMsg(String(e))
+                      );
+                    }
+                  }}
                   onSelectAndLaunch={(id) => {
                     setActiveTab("play");
                     handleLaunch(id);
