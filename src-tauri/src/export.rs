@@ -190,7 +190,7 @@ async fn scan_and_resolve_mods(mc_dir: &Path) -> AppResult<Vec<ScannedMod>> {
     }
 
     let client = reqwest::Client::builder()
-        .user_agent("ZyncLauncher/0.1.0 (github.com/Jamielin53/Zync)")
+        .user_agent("ZyncLauncher/0.1.0 (github.com/DeZynk/Zync)")
         .build()?;
 
     // 1. Batch lookup on Modrinth via SHA512

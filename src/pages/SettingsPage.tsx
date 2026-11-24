@@ -303,9 +303,9 @@ export function SettingsPage({
           </div>
         )}
 
-        {config.accounts.length > 0 && (
+        {(config.accounts ?? []).length > 0 && (
           <div className="space-y-2 pt-1">
-            {config.accounts.map((acc) => {
+            {(config.accounts ?? []).map((acc) => {
               const active = acc.id === config.activeAccountId;
               return (
                 <div

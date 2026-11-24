@@ -46,8 +46,8 @@ pub struct LauncherConfig {
     pub sidebar_collapsed: bool,
     pub active_instance_id: Option<String>,
     pub active_account_id: Option<String>,
-    /// Populated at runtime from DPAPI-encrypted `accounts.dat`; omitted when saving `zync-config.json`.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Populated at runtime from DPAPI-encrypted `accounts.dat`; stripped when writing `zync-config.json`.
+    #[serde(default)]
     pub accounts: Vec<Account>,
     pub ms_client_id: Option<String>,
 }
@@ -310,9 +310,11 @@ pub fn write_config(config: &LauncherConfig) -> AppResult<()> {
     write_encrypted_accounts(config, &config.accounts)?;
 
     // 2. Write `zync-config.json` WITHOUT any account tokens or credentials
-    let mut sanitized = config.clone();
-    sanitized.accounts = Vec::new();
-    let json = serde_json::to_string_pretty(&sanitized)?;
+    let mut val = serde_json::to_value(config)?;
+    if let Some(obj) = val.as_object_mut() {
+        obj.remove("accounts");
+    }
+    let json = serde_json::to_string_pretty(&val)?;
     fs::write(&path, json)?;
     Ok(())
 }
@@ -345,7 +347,7 @@ pub fn open_config_folder() -> AppResult<()> {
 
 #[cfg(all(test, target_os = "windows"))]
 mod tests {
-    use super::dpapi;
+    use super::{dpapi, LauncherConfig};
 
     #[test]
     fn test_dpapi_encrypt_decrypt_roundtrip() {
@@ -354,5 +356,11 @@ mod tests {
         assert_ne!(encrypted.as_slice(), secret);
         let decrypted = dpapi::decrypt(&encrypted).expect("decrypt failed");
         assert_eq!(decrypted.as_slice(), secret);
+    }
+
+    #[test]
+    fn test_default_config_serializes_empty_accounts_array() {
+        let json = serde_json::to_string(&LauncherConfig::default()).expect("serialize failed");
+        assert!(json.contains("\"accounts\":[]"));
     }
 }

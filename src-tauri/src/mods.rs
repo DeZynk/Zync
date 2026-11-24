@@ -176,7 +176,7 @@ pub async fn search_content(
     limit: Option<u32>,
 ) -> AppResult<Vec<ContentSearchResult>> {
     let client = reqwest::Client::builder()
-        .user_agent("ZyncLauncher/0.1.0 (github.com/Jamielin53)")
+        .user_agent("ZyncLauncher/0.1.0 (github.com/DeZynk/Zync)")
         .build()?;
     let lim = limit.unwrap_or(24);
 
@@ -302,7 +302,7 @@ pub async fn install_content_item(
     fs::create_dir_all(&target_dir)?;
 
     let client = reqwest::Client::builder()
-        .user_agent("ZyncLauncher/0.1.0 (github.com/Jamielin53)")
+        .user_agent("ZyncLauncher/0.1.0 (github.com/DeZynk/Zync)")
         .build()?;
 
     let mc = mc_version.unwrap_or(inst.mc_version);
@@ -417,7 +417,7 @@ pub async fn install_modpack(
     title: String,
 ) -> AppResult<GameInstance> {
     let client = reqwest::Client::builder()
-        .user_agent("ZyncLauncher/0.1.0 (github.com/Jamielin53)")
+        .user_agent("ZyncLauncher/0.1.0 (github.com/DeZynk/Zync)")
         .build()?;
 
     let _ = app.emit(

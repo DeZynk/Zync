@@ -1,8 +1,8 @@
 [package]
 name = "zync"
-version = "0.1.0"
+version = "0.1.1"
 description = "A lightweight, fast, open-source Minecraft launcher"
-authors = ["Jamielin53"]
+authors = ["DeZynk"]
 edition = "2021"
 
 [lib]

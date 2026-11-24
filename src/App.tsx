@@ -127,7 +127,7 @@ export function App() {
 
   const activeInstance =
     instances.find((i) => i.id === config?.activeInstanceId) ?? instances[0];
-  const activeAccount = config?.accounts.find((a) => a.id === config.activeAccountId);
+  const activeAccount = (config?.accounts ?? []).find((a) => a.id === config?.activeAccountId);
   const enableAnimations = config?.enableAnimations ?? true;
 
   return (
